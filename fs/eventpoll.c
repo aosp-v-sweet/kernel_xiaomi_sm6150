@@ -2167,8 +2167,8 @@ error_return:
  * Implement the event wait interface for the eventpoll file. It is the kernel
  * part of the user space epoll_wait(2).
  */
-SYSCALL_DEFINE4(epoll_wait, int, epfd, struct epoll_event __user *, events,
-		int, maxevents, int, timeout)
+static int do_epoll_wait(int epfd, struct epoll_event __user *events,
+			 int maxevents, struct timespec64 *to)
 {
 	int error;
 	struct fd f;
@@ -2209,6 +2209,15 @@ error_fput:
 	return error;
 }
 
+SYSCALL_DEFINE4(epoll_wait, int, epfd, struct epoll_event __user *, events,
+		int, maxevents, int, timeout)
+{
+	struct timespec64 to;
+
+	return do_epoll_wait(epfd, events, maxevents,
+			     ep_timeout_to_timespec(&to, timeout));
+}
+
 /*
  * Implement the event wait interface for the eventpoll file. It is the kernel
  * part of the user space epoll_pwait(2).
@@ -2233,7 +2242,7 @@ static int do_epoll_pwait(int epfd, struct epoll_event __user *events,
 		set_current_blocked(&ksigmask);
 	}
 
-	error = sys_epoll_wait(epfd, events, maxevents, to);
+	error = do_epoll_wait(epfd, events, maxevents, to);
 
 	/*
 	 * If we changed the signal mask, we need to restore the original one.
@@ -2306,7 +2315,7 @@ static int do_compat_epoll_pwait(int epfd, struct epoll_event __user *events,
 		set_current_blocked(&ksigmask);
 	}
 
-	err = sys_epoll_wait(epfd, events, maxevents, timeout);
+	err = do_epoll_wait(epfd, events, maxevents, timeout);
 
 	/*
 	 * If we changed the signal mask, we need to restore the original one.
